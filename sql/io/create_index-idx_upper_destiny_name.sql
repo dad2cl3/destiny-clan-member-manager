@@ -1,0 +1,1 @@
+CREATE INDEX io.idx_upper_destiny_name ON io.t_members USING upper(destiny_name);

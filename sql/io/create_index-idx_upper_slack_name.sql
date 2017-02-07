@@ -1,0 +1,1 @@
+CREATE INDEX io.idx_upper_slack_name ON io.t_slack_accounts USING upper(slack_name);
