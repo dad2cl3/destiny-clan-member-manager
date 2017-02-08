@@ -1,6 +1,10 @@
 <?php
 
+//Test URL
+$dodioBetaUrl = 'YOUR-SLACK-TEST-INCOMING-WEBHOOK-URL';
+
 //Production URL
-$dodioUrl = 'YOUR-SLACK-INCOMING-WEBHOOK-URL';
+$dodioAdminUrl = 'YOUR-SLACK-INCOMING-WEBHOOK-URL';
+$OAuthToken = 'YOUR-SLACK-OAUTH-TOKEN';
 
 ?>
