@@ -1,0 +1,16 @@
+{
+  "Comment" : "The state machine runs daily to retrieve clan members and characters",
+  "StartAt" : "Stage Clan Members",
+  "States" : {
+    "Stage Clan Members" : {
+      "Type" : "Task",
+      "Resource" : "arn:aws:lambda:YOUR-ARN:function:stageClanMembers",
+      "Next" : "Load Clan Members"
+    },
+    "Load Clan Members" : {
+      "Type" : "Task",
+      "Resource" : "arn:aws:lambda:YOUR-ARN:function:loadClanMembers",
+      "End" : true
+    }
+  }
+}
