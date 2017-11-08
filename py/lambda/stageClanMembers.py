@@ -38,24 +38,39 @@ def buildRequests(clans):
 
     return requests
 
+def buildCharacterRequests(members):
+    print('Building character requests...')
+
+    requests = []
+
+    for member in members:
+        request = apiConfig['memberUrl'].format(member['destinyUserInfo']['membershipType'], member['destinyUserInfo']['membershipId'])
+        requests.append(request)
+
+    return requests
+
 def getMembers(requestURL):
 
     xApiKey = apiConfig['xApiKey']
-
     members = requests.get(requestURL, headers={'X-API-Key': xApiKey}).text
-
     return members
 
-def processRequests(memberRequests):
+def getBungieData(requestURL):
+
+    xApiKey = apiConfig['xApiKey']
+    response = requests.get(requestURL, headers={'X-API-Key': xApiKey}).text
+    return response
+
+def processRequests(apiRequests):
     print('Processing requests...')
 
-    # Initialize variable to hold members
-    members = []
+    # Initialize variable to hold responses
+    responses = []
 
     # Capture starting time
     apiStart = time.time()
 
-    requestCount = len(memberRequests)
+    requestCount = len(apiRequests)
     print('Requests: {0}'.format(requestCount))
 
     maxChunkSize = 25
@@ -73,10 +88,11 @@ def processRequests(memberRequests):
             chunk = i - start + 1
 
             with futures.ThreadPoolExecutor(chunk) as executor:
-                futureRequests = {executor.submit(getMembers, request): request for request in memberRequests[start:(i + 1)]}
+                #futureRequests = {executor.submit(getMembers, request): request for request in memberRequests[start:(i + 1)]}
+                futureRequests = {executor.submit(getBungieData, request): request for request in apiRequests[start:(i + 1)]}
 
             for request in futures.as_completed(futureRequests):
-                members.append(request.result())
+                responses.append(request.result())
 
             start = i + 1
 
@@ -85,7 +101,7 @@ def processRequests(memberRequests):
     # Calculation API execution time
     apiDuration = apiEnd - apiStart
     print('API execution time: {0:.2f}'.format(apiDuration))
-    return members
+    return responses
 
 def prepareMembers(members):
     print('Preparing member data...')
@@ -97,11 +113,16 @@ def prepareMembers(members):
         members = json.loads(clan)['Response']['results']
 
         for member in members:
+            record = {}
+            record['clan_id'] = member['groupId']
+
             clanId = [member['groupId']]
 
             destinyUserInfo = member['destinyUserInfo']
             del destinyUserInfo['iconPath']
 
+            record['destinyUserInfo'] = destinyUserInfo
+            #print(record)
             bungieNetUserInfo = []
 
             if 'bungieNetUserInfo' in member.keys():
@@ -109,29 +130,83 @@ def prepareMembers(members):
                 del bungieNetUserInfo['iconPath']
                 del bungieNetUserInfo['supplementalDisplayName']
 
-            if len(bungieNetUserInfo) > 0:
+                record['bungieNetUserInfo'] = bungieNetUserInfo
+
+            '''if len(bungieNetUserInfo) > 0:
                 record = clanId + list(destinyUserInfo.values()) + list(bungieNetUserInfo.values())
             else:
-                record = clanId + list(destinyUserInfo.values())
+                record = clanId + list(destinyUserInfo.values())'''
 
             memberList.append(record)
             memberCount += 1
 
     return memberList
 
+def prepareCharacters(characters):
+    print('Preparing character data...')
+
+    characterList = []
+
+    for characterResponse in characters:
+        characterKeys = json.loads(characterResponse).keys()
+
+        if 'Response' in characterKeys:
+            profile = json.loads(characterResponse)['Response']['profile']
+            #print(profile)
+            characterData = json.loads(characterResponse)['Response']['characters']['data']
+            for characterId in characterData:
+                #print(characterData[characterId])
+                character = characterData[characterId]
+
+                record = {}
+                record['membershipId'] = character['membershipId']
+                record['membershipType'] = character['membershipType']
+                record['characterId'] = character['characterId']
+                record['dateLastPlayed'] = character['dateLastPlayed']
+                record['minutesPlayedTotal'] = character['minutesPlayedTotal']
+                record['classHash'] = character['classHash']
+
+                characterList.append(record)
+
+    return characterList
+
 def stageMembers(db, members):
     print('Staging members...')
     inserts = 0
 
     for member in members:
-        if len(member) == 7:
+        if len(member) == 3:
             sql = sqlConfig['longMemberInsert']
+            record = [member['clan_id']] + list(member['destinyUserInfo'].values()) + list(member['bungieNetUserInfo'].values())
 
-        elif len(member) == 4:
+        elif len(member) == 2:
             sql = sqlConfig['shortMemberInsert']
+            record = [member['clan_id']] + list(member['destinyUserInfo'].values())
 
         pgCursor = db.cursor()
-        pgCursor.execute(sql, member)
+        pgCursor.execute(sql, record)
+        inserts += pgCursor.rowcount
+
+    # Perform all inserts before issuing the commit
+    db.commit()
+
+    return inserts
+
+def stageCharacters(db, characters):
+    print('Staging characters...')
+    inserts = 0
+
+    for character in characters:
+        '''if len(member) == 3:
+            sql = sqlConfig['longMemberInsert']
+            record = [member['clan_id']] + list(member['destinyUserInfo'].values()) + list(member['bungieNetUserInfo'].values())
+
+        elif len(member) == 2:
+            sql = sqlConfig['shortMemberInsert']
+            record = [member['clan_id']] + list(member['destinyUserInfo'].values())'''
+
+        pgCursor = db.cursor()
+        pgCursor.execute(sqlConfig['characterInsert'], list(character.values()))
         inserts += pgCursor.rowcount
 
     # Perform all inserts before issuing the commit
@@ -162,8 +237,21 @@ def handler(event, context):
     memberList = prepareMembers(members)
 
     # Stage members
-    inserts = stageMembers(pg, memberList)
-    print('Inserts: {0}'.format(inserts))
+    memberInserts = stageMembers(pg, memberList)
+    print('Inserts: {0}'.format(memberInserts))
+
+    # Build character requests
+    characterRequests = buildCharacterRequests(memberList)
+
+    # Get the characters from API
+    characters = processRequests(characterRequests)
+
+    # Prepare the character data
+    characterList = prepareCharacters(characters)
+
+    # Stage characters
+    characterInserts = stageCharacters(pg, characterList)
+    print('Inserts: {0}'.format(characterInserts))
 
     # Close database connection
     pg.close()
@@ -172,4 +260,9 @@ def handler(event, context):
 
     duration = end - start
     print('Duration: {0:.2f}s'.format(duration))
+
+    # Prepare to return data
+    counts = {}
+    counts['counts'] = {'members': memberInserts, 'characters': characterInserts}
+    return counts
 

@@ -84,30 +84,30 @@ def sendReport(report):
 
     return requests.post(url, data=json.dumps(payload), headers=headers)
 
-'''def handler (event, context):'''
-# Open the database connection
-pg = pg8000.connect(host=dbConfig['host'], port=dbConfig['port'], database=dbConfig['database'], user=dbConfig['user'], password=dbConfig['password'])
+def handler (event, context):
+    # Open the database connection
+    pg = pg8000.connect(host=dbConfig['host'], port=dbConfig['port'], database=dbConfig['database'], user=dbConfig['user'], password=dbConfig['password'])
 
-reportData = {}
-# Get the overall counts
-counts = runQuery(pg, sqlConfig['memberCount'])
-reportData['counts'] = counts
+    reportData = {}
+    # Get the overall counts
+    counts = runQuery(pg, sqlConfig['memberCount'])
+    reportData['counts'] = counts
 
-# Get the new members
-newMembers = runQuery(pg, sqlConfig['newMembers'])
-reportData['newMembers'] = newMembers
+    # Get the new members
+    newMembers = runQuery(pg, sqlConfig['newMembers'])
+    reportData['newMembers'] = newMembers
 
-# Get the former members
-formerMembers = runQuery(pg, sqlConfig['formerMembers'])
-reportData['formerMembers'] = formerMembers
+    # Get the former members
+    formerMembers = runQuery(pg, sqlConfig['formerMembers'])
+    reportData['formerMembers'] = formerMembers
 
-# Build the report
-report = buildReport(reportData)
+    # Build the report
+    report = buildReport(reportData)
 
-# Send the report
-result = sendReport(report)
-print(result.text)
-print(result.status_code)
+    # Send the report
+    result = sendReport(report)
 
-# Close the database connection
-pg.close()
+    print(result.status_code)
+
+    # Close the database connection
+    pg.close()
