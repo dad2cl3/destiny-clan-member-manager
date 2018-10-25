@@ -4,12 +4,12 @@
   "States" : {
     "Stage Clan Members" : {
       "Type" : "Task",
-      "Resource" : "arn:aws:lambda:YOUR-ARN:function:stageClanMembers",
+      "Resource" : "arn:aws:lambda:YOUR-ARN:function:stage_clan_members",
       "Next" : "Load Clan Members"
     },
     "Load Clan Members" : {
       "Type" : "Task",
-      "Resource" : "arn:aws:lambda:YOUR-ARN:function:loadClanMembers",
+      "Resource" : "arn:aws:lambda:YOUR-ARN:function:load_clan_members",
       "Next" : "Send Admin Report"
     },
     "Send Admin Report" : {
