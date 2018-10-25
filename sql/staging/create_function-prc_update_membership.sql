@@ -3,7 +3,7 @@ RETURNS varchar
 AS $BODY$
 
 DECLARE
-   v_some_count   INTEGER := 0;
+   v_some_count INTEGER := 0;
    v_output VARCHAR(500);
 BEGIN
 
@@ -12,7 +12,7 @@ BEGIN
 	
    /* Former members */
    UPDATE groups.t_members
-   SET deleted = CURRENT_DATE
+   SET deleted = p_effective_date, deleted_flag = TRUE
    WHERE destiny_id IN (
    	SELECT destiny_id
    	FROM groups.t_members tm
@@ -31,7 +31,7 @@ BEGIN
 
    /* Returning members */
    UPDATE groups.t_members
-   SET deleted = NULL
+   SET deleted = NULL, deleted_flag = FALSE
    FROM (
    	SELECT destiny_id, destiny_membership_type
    	FROM staging.t_clan_members) tcm
@@ -60,23 +60,44 @@ BEGIN
 	    -- INSERT INTO staging.t_daily_counts
 	         -- VALUES (p_effective_date, 'Clan changes', v_some_count);
 
+    /* Versions owned */
+    WITH versions_owned AS (
+        SELECT DISTINCT tm.destiny_id, tm.destiny_membership_type, tmc.versions_owned
+        FROM groups.t_members tm, staging.t_member_characters tmc
+        WHERE tm.destiny_id = tmc.destiny_id
+        AND tm.destiny_membership_type = tmc.destiny_membership_type
+    )
+    UPDATE groups.t_members
+    SET versions_owned = versions_owned.versions_owned
+    FROM versions_owned
+    WHERE versions_owned.destiny_id = t_members.destiny_id
+    AND versions_owned.destiny_membership_type = t_members.destiny_membership_type
+    AND t_members.versions_owned != versions_owned.versions_owned;
+
+    GET DIAGNOSTICS v_some_count = ROW_COUNT;
+    v_output := v_output || ',"versions":"' || v_some_count || '"';
+
    /* New members */
 	INSERT INTO groups.t_members (
 		clan_id,
 		bungie_id,
 		bungie_name,
 		bungie_membership_type,
+		bungie_icon_path,
 		destiny_id,
 		destiny_name,
-		destiny_membership_type)
+		destiny_membership_type,
+		destiny_icon_path)
 	(SELECT
 		clan_id,
 		bungie_id,
 		bungie_name,
 		bungie_membership_type,
+		bungie_icon_path,
 		destiny_id,
 		destiny_name,
-		destiny_membership_type
+		destiny_membership_type,
+		destiny_icon_path
 	FROM staging.t_clan_members tcm
 	   WHERE NOT EXISTS (
 		SELECT 'x'
@@ -120,7 +141,7 @@ BEGIN
    /* Former characters */
    -- DELETE FROM groups.t_characters
    UPDATE groups.t_characters
-   SET deleted = CURRENT_DATE
+   SET deleted = p_effective_date, deleted_flag = TRUE
    WHERE character_id IN (
    	SELECT character_id
    	FROM groups.t_characters tc
@@ -139,7 +160,7 @@ BEGIN
 
    /* Returning characters */
    UPDATE groups.t_characters
-   SET deleted = NULL
+   SET deleted = NULL, deleted_flag = FALSE
    FROM (
    	SELECT character_id
    	FROM staging.t_member_characters) tmc
